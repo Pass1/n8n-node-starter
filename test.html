@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stocks Mentions Dashboard • Supabase (No Frameworks)</title>
+  <style>
+    :root {
+      --bg: #0b0d10; --muted:#161a1f; --card:#101419; --text:#e6ebf2; --sub:#97a1b3; --accent:#64b5f6;
+      --red:#ef5350; --green:#66bb6a; --amber:#ffca28; --border:#202632;
+    }
+    * { box-sizing: border-box }
+    html, body { height: 100% }
+    body {
+      margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+    }
+    header {
+      position: sticky; top: 0; z-index: 5; background: linear-gradient(180deg, rgba(11,13,16,.95), rgba(11,13,16,.75)); backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+    }
+    .bar { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px; max-width: 1200px; margin: 0 auto; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .dot { width:10px; height:10px; border-radius:50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(100,181,246,.15); }
+    h1 { font-size: 16px; margin: 0; letter-spacing:.2px; }
+    .conn { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+    input[type="password"], input[type="text"], input[type="search"], select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 120px; }
+    input::placeholder { color: #758195; }
+    button { background: var(--muted); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+    button.primary { background: var(--accent); color: #0b0d10; border: 1px solid #5dade2; }
+    button.ghost { background: transparent; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    main { max-width: 1200px; margin: 16px auto; padding: 0 12px 32px; }
+
+    .tabs { display:flex; gap:6px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px; }
+    .tabs button { border-radius: 999px; padding: 6px 12px; background: var(--muted); }
+    .tabs button.active { background: var(--accent); color: #0b0d10; }
+
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+    @media (max-width: 900px){ .grid { grid-template-columns: 1fr } }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: clip; }
+    .card h2 { font-size: 14px; margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--sub); }
+    .card .body { padding: 10px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; font-weight: 600; color: var(--sub); border-bottom: 1px solid var(--border); padding: 8px 6px; position: sticky; top: 0; background: var(--card); }
+    tbody td { border-bottom: 1px dashed rgba(255,255,255,.06); padding: 8px 6px; vertical-align: top; }
+    tbody tr:hover { background: rgba(255,255,255,.03); }
+    .rows { max-height: 520px; overflow: auto; }
+
+    .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); color: var(--sub); }
+    .pill.green { color: var(--green); border-color: rgba(102,187,106,.35); background: rgba(102,187,106,.12) }
+    .pill.red { color: var(--red); border-color: rgba(239,83,80,.35); background: rgba(239,83,80,.12) }
+    .pill.amber { color: var(--amber); border-color: rgba(255,202,40,.35); background: rgba(255,202,40,.12) }
+
+    .row-actions { display:flex; gap:6px }
+    .muted { color: var(--sub) }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace; font-size: 12px }
+
+    .toolbar { display:flex; gap:8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px }
+    .spacer { flex: 1 }
+    .nowrap { white-space: nowrap }
+    .small { font-size: 12px; color: var(--sub) }
+    .footer-note { margin-top: 6px; color: var(--sub); font-size: 12px }
+    .error { color: var(--red); }
+    .ok { color: var(--green); }
+    .link { color: var(--accent); text-decoration: none }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand">
+        <div class="dot" aria-hidden></div>
+        <h1>Stocks Mentions Dashboard <span class="small">· minimal, framework‑free</span></h1>
+      </div>
+      <form class="conn" id="connForm">
+        <input id="url" type="text" placeholder="Supabase project URL (https://YOUR-PROJECT.supabase.co)" required />
+        <input id="key" type="password" placeholder="Anon key (RLS required)" required />
+        <button class="primary" id="connectBtn" type="submit">Connect</button>
+        <button type="button" id="saveBtn" title="Save to this browser" class="ghost">Save</button>
+        <span id="status" class="small muted">Not connected</span>
+      </form>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs" id="tabs">
+      <button data-tab="videos" class="active">Videos</button>
+      <button data-tab="mentions">Mentions</button>
+      <button data-tab="aggregates">Aggregates</button>
+      <button data-tab="stocks">Stocks</button>
+      <button data-tab="transcripts">Transcripts</button>
+    </div>
+
+    <section id="tab-videos" class="tab">
+      <div class="grid">
+        <div class="card">
+          <h2>Latest videos</h2>
+          <div class="body">
+            <div class="toolbar">
+              <input id="videoSearch" type="search" placeholder="Search title…" />
+              <div class="spacer"></div>
+              <label class="small nowrap">Limit
+                <select id="videoLimit">
+                  <option>25</option><option selected>50</option><option>100</option>
+                </select>
+              </label>
+              <button id="reloadVideos">Reload</button>
+            </div>
+            <div class="rows">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Published</th>
+                    <th>Title</th>
+                    <th>Channel</th>
+                    <th>Processed</th>
+                  </tr>
+                </thead>
+                <tbody id="videosBody"></tbody>
+              </table>
+            </div>
+            <div class="footer-note">Select a video to see its mentions & aggregates.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Details</h2>
+          <div class="body" id="videoDetails">
+            <div class="muted">Pick a video on the left.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-mentions" class="tab" hidden>
+      <div class="card">
+        <h2>Recent mentions</h2>
+        <div class="body">
+          <div class="toolbar">
+            <input id="mentionsQuery" type="search" placeholder="Filter by $TICKER or text… (e.g., NVDA or \"AI chips\")" />
+            <select id="mentionsSentiment">
+              <option value="">All sentiments</option>
+              <option value="bull">Bullish</option>
+              <option value="bear">Bearish</option>
+              <option value="neutral">Neutral</option>
+            </select>
+            <div class="spacer"></div>
+            <label class="small nowrap">Limit
+              <select id="mentionsLimit">
+                <option>25</option><option selected>50</option><option>100</option>
+              </select>
+            </label>
+            <button id="reloadMentions">Reload</button>
+          </div>
+          <div class="rows">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Ticker</th>
+                  <th>Summary</th>
+                  <th>Sentiment</th>
+                  <th>Score</th>
+                  <th>Video</th>
+                </tr>
+              </thead>
+              <tbody id="mentionsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-aggregates" class="tab" hidden>
+      <div class="card">
+        <h2>Aggregates</h2>
+        <div class="body">
+          <div class="toolbar">
+            <input id="aggTicker" type="search" placeholder="Filter by $TICKER…" />
+            <select id="aggVerdict">
+              <option value="">All</option>
+              <option value="bull">Bullish</option>
+              <option value="bear">Bearish</option>
+              <option value="neutral">Neutral</option>
+            </select>
+            <div class="spacer"></div>
+            <label class="small nowrap">Limit
+              <select id="aggLimit">
+                <option>25</option><option selected>50</option><option>100</option>
+              </select>
+            </label>
+            <button id="reloadAgg">Reload</button>
+          </div>
+          <div class="rows">
+            <table>
+              <thead>
+                <tr>
+                  <th>Published</th>
+                  <th>Ticker</th>
+                  <th>Verdict</th>
+                  <th class="nowrap">Bull/Bear/Neutral</th>
+                  <th>Video</th>
+                </tr>
+              </thead>
+              <tbody id="aggBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-stocks" class="tab" hidden>
+      <div class="grid">
+        <div class="card">
+          <h2>Stocks</h2>
+          <div class="body">
+            <div class="toolbar">
+              <input id="stockSearch" type="search" placeholder="Find $TICKER or name…" />
+              <div class="spacer"></div>
+              <label class="small nowrap">Limit
+                <select id="stocksLimit">
+                  <option>25</option><option selected>50</option><option>100</option>
+                </select>
+              </label>
+              <button id="reloadStocks">Reload</button>
+            </div>
+            <div class="rows">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th>Name</th>
+                    <th>Exchange</th>
+                  </tr>
+                </thead>
+                <tbody id="stocksBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Selected stock</h2>
+          <div class="body" id="stockDetails">
+            <div class="muted">Choose a stock to see its recent mentions & aggregates.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-transcripts" class="tab" hidden>
+      <div class="card">
+        <h2>Transcripts</h2>
+        <div class="body">
+          <div class="toolbar">
+            <input id="trxSearch" type="search" placeholder="Search transcript text (ILIKE)…" />
+            <div class="spacer"></div>
+            <label class="small nowrap">Limit
+              <select id="trxLimit">
+                <option>10</option><option selected>25</option><option>50</option>
+              </select>
+            </label>
+            <button id="reloadTrx">Search</button>
+          </div>
+          <div class="rows">
+            <table>
+              <thead>
+                <tr>
+                  <th>Video</th>
+                  <th>Language</th>
+                  <th>Excerpt</th>
+                </tr>
+              </thead>
+              <tbody id="trxBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer-note">Tip: This app talks to Supabase PostgREST directly via <span class="mono">/rest/v1</span> using only <span class="mono">fetch</span>. No build tools, no frameworks. Ensure Row Level Security is enabled and policies permit reads with your anon key.</p>
+  </main>
+
+  <script>
+    // ————— Minimal Supabase REST helper (no dependencies) —————
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+
+    const state = {
+      url: localStorage.getItem('sb_url') || '',
+      key: localStorage.getItem('sb_key') || '',
+      connected: false,
+      selectedVideo: null,
+      selectedStock: null,
+    };
+
+    const headers = () => ({
+      'apikey': state.key,
+      'Authorization': 'Bearer ' + state.key,
+      'Content-Type': 'application/json',
+      'Accept-Profile': 'public'
+    });
+
+    async function rest(path, params={}){
+      if(!state.url || !state.key) throw new Error('Set URL and key');
+      const url = new URL(state.url.replace(/\/$/,'') + '/rest/v1/' + path);
+      Object.entries(params).forEach(([k,v])=>{ if(v!==undefined && v!==null && v!=='') url.searchParams.set(k, v) });
+      const res = await fetch(url, { headers: { ...headers(), Prefer: 'return=representation' }});
+      if(!res.ok){
+        const text = await res.text();
+        throw new Error(res.status + ' ' + res.statusText + (text? (' — ' + text):''));
+      }
+      return res.json();
+    }
+
+    function fmtDate(s){ try { return new Date(s).toLocaleString(); } catch(e){ return s } }
+    function fmtNum(n){ return (n==null? '—' : (+n).toFixed(3)) }
+    function fmtPx(n){ return (n==null? '—' : (+n).toFixed(2)) }
+    function verdictPill(v){
+      const m = { bull:'green', bear:'red', neutral:'amber' };
+      return `<span class="pill ${m[v]||''}">${v||'—'}</span>`
+    }
+    function sentimentPill(v){ return verdictPill(v); }
+    function ohlcLine(o,h,l,c){
+      return `<span class="small muted">O ${fmtPx(o)} H ${fmtPx(h)} L ${fmtPx(l)} C ${fmtPx(c)}</span>`;
+    }
+    function addTimeParam(url, seconds){
+      try {
+        const u = new URL(url);
+        u.searchParams.set('t', Math.max(0, Math.floor(seconds||0)) + 's');
+        return u.toString();
+      } catch { // fallback if URL ctor fails
+        const sep = url.includes('?') ? '&' : '?';
+        return url + sep + 't=' + Math.max(0, Math.floor(seconds||0)) + 's';
+      }
+    }
+
+    // ————— Connection UI —————
+    (function initConn(){
+      $('#url').value = state.url; $('#key').value = state.key;
+      updateStatus();
+      $('#connForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        state.url = $('#url').value.trim();
+        state.key = $('#key').value.trim();
+        try {
+          // quick probe: fetch 1 row from channels
+          await rest('channels', { select:'id,title', limit:1, order:'title.asc' });
+          state.connected = true; updateStatus('Connected', true);
+          // load default tab
+          loadVideos(); loadMentions(); loadAggregates(); loadStocks();
+        } catch(err){
+          state.connected = false; updateStatus('Error: ' + err.message, false);
+        }
+      });
+      $('#saveBtn').addEventListener('click', ()=>{
+        localStorage.setItem('sb_url', $('#url').value.trim());
+        localStorage.setItem('sb_key', $('#key').value.trim());
+        updateStatus('Saved locally ✓', true);
+      });
+    })();
+
+    function updateStatus(text, ok){
+      const el = $('#status');
+      if(text) el.textContent = text; else el.textContent = state.connected ? 'Connected' : 'Not connected';
+      el.className = 'small ' + (ok===false ? 'error' : ok===true ? 'ok' : 'muted');
+    }
+
+    // ————— Tabs —————
+    $$('#tabs button').forEach(btn=>btn.addEventListener('click', ()=>{
+      $$('#tabs button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const name = btn.dataset.tab;
+      $$('.tab').forEach(t=>t.hidden = true);
+      $('#tab-' + name).hidden = false;
+    }));
+
+    // ————— Videos tab —————
+    $('#reloadVideos').addEventListener('click', loadVideos);
+    $('#videoSearch').addEventListener('input', debounce(loadVideos, 300));
+    $('#videoLimit').addEventListener('change', loadVideos);
+
+    async function loadVideos(){
+      if(!state.connected) return;
+      const q = $('#videoSearch').value.trim();
+      const limit = $('#videoLimit').value;
+      // Embed channel via FK: select=...,channel:channels(id,title)
+      const params = { select: 'id,title,published_at,url,processed_at,channel:channels(id,title)', order: 'published_at.desc', limit };
+      if(q) params.title = `ilike.*${q.replaceAll('*','%')}*`;
+      const rows = await rest('videos', params);
+      const tbody = $('#videosBody');
+      tbody.innerHTML = rows.map(r=>`
+        <tr data-id="${r.id}">
+          <td class="nowrap">${fmtDate(r.published_at)}</td>
+          <td><a class="link" href="${r.url}" target="_blank" rel="noreferrer">${escapeHtml(r.title)}</a></td>
+          <td>${escapeHtml(r.channel?.title || '—')}</td>
+          <td>${r.processed_at ? '✓ ' + new Date(r.processed_at).toLocaleDateString() : '<span class="muted">pending</span>'}</td>
+        </tr>`).join('');
+      $$('#videosBody tr').forEach(tr=>tr.addEventListener('click', ()=> showVideo(tr.dataset.id)));
+    }
+
+    async function showVideo(id){
+      // fetch mentions + aggregates for this video
+      const [video] = await rest('videos', { select:'id,title,url,published_at,channel:channels(title)', id: `eq.${id}`});
+      state.selectedVideo = video;
+      const mentions = await rest('mentions', {
+        select:'id,ticker,summary,start_s,sentiment_label,sentiment_score,created_at,published_at,open,high,low,close,stock:stocks(name)',
+        video_id: `eq.${id}`,
+        order:'published_at.desc', limit: 100
+      });
+      const aggs = await rest('aggregates', {
+        select:'ticker,stock:stocks(name),bull_score,bear_score,neutral_score,verdict',
+        video_id:`eq.${id}`
+      });
+
+      $('#videoDetails').innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px">
+          <div>
+            <div class="small muted">${fmtDate(video.published_at)} · ${escapeHtml(video.channel?.title||'')}</div>
+            <div style="font-weight:600; margin:2px 0 6px"><a class="link" href="${video.url}" target="_blank" rel="noreferrer">${escapeHtml(video.title)}</a></div>
+          </div>
+          <a class="pill" href="${video.url}" target="_blank" rel="noreferrer">Open video</a>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+          <h2>Aggregates for this video</h2>
+          <div class="body">
+            ${aggs.length? `<table><thead><tr><th>Ticker</th><th>Verdict</th><th>Bull</th><th>Bear</th><th>Neutral</th></tr></thead>
+            <tbody>${aggs.map(a=>`<tr>
+              <td class="mono">${escapeHtml(a.ticker)}<br><span class="muted">${escapeHtml(a.stock?.name||'')}</span></td>
+              <td>${verdictPill(a.verdict)}</td>
+              <td>${fmtNum(a.bull_score)}</td>
+              <td>${fmtNum(a.bear_score)}</td>
+              <td>${fmtNum(a.neutral_score)}</td>
+            </tr>`).join('')}</tbody></table>` : '<div class="muted">No aggregates.</div>'}
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Mentions in this video</h2>
+          <div class="body">
+            ${mentions.length ? `<div class="rows"><table><thead><tr><th>Time</th><th>Ticker</th><th>Summary</th><th>Sentiment</th><th>Score</th><th>Video</th></tr></thead>
+            <tbody>${mentions.map(m=>`<tr>
+              <td class="nowrap">${m.start_s!=null? (m.start_s.toFixed(0)+'s') : '—'}</td>
+              <td class="mono">${escapeHtml(m.ticker)}<br><span class="muted">${escapeHtml(m.stock?.name||'')}</span><br>${ohlcLine(m.open,m.high,m.low,m.close)}</td>
+              <td>${escapeHtml(m.summary)}</td>
+              <td>${sentimentPill(m.sentiment_label)}</td>
+              <td>${fmtNum(m.sentiment_score)}</td>
+              <td><a class="link" href="${addTimeParam(video.url, m.start_s)}" target="_blank" rel="noreferrer">Open at ${m.start_s!=null? (Math.max(0,Math.floor(m.start_s))+'s'):'0s'}</a></td>
+            </tr>`).join('')}</tbody></table></div>` : '<div class="muted">No mentions.</div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    // ————— Mentions tab —————
+    $('#reloadMentions').addEventListener('click', loadMentions);
+    $('#mentionsQuery').addEventListener('input', debounce(loadMentions, 350));
+    $('#mentionsSentiment').addEventListener('change', loadMentions);
+    $('#mentionsLimit').addEventListener('change', loadMentions);
+
+    async function loadMentions(){
+      if(!state.connected) return;
+      const limit = $('#mentionsLimit').value;
+      const sentiment = $('#mentionsSentiment').value;
+      const q = $('#mentionsQuery').value.trim();
+      const params = { select: 'id,ticker,summary,start_s,sentiment_label,sentiment_score,created_at,published_at,open,high,low,close,video:videos(id,title,published_at,url,channel:channels(title)),stock:stocks(name,exchange)', order: 'published_at.desc', limit };
+      if(sentiment) params.sentiment_label = `eq.${sentiment}`;
+      if(q){
+        if(/^\$?[A-Z.]{1,10}$/.test(q)){
+          params.ticker = `eq.${q.replace('$','').toUpperCase()}`;
+        } else {
+          params.summary = `ilike.*${q.replaceAll('*','%')}*`;
+        }
+      }
+      const rows = await rest('mentions', params);
+      $('#mentionsBody').innerHTML = rows.map(r=>`
+        <tr>
+          <td class="nowrap">${fmtDate(r.published_at)}</td>
+          <td class="mono">${escapeHtml(r.ticker)}<br><span class="muted">${escapeHtml(r.stock?.name||'')}</span><br>${ohlcLine(r.open,r.high,r.low,r.close)}</td>
+          <td>${escapeHtml(r.summary)}</td>
+          <td>${sentimentPill(r.sentiment_label)}</td>
+          <td>${fmtNum(r.sentiment_score)}</td>
+          <td><a class="link" href="${addTimeParam(r.video?.url||'', r.start_s)}" target="_blank" rel="noreferrer">${escapeHtml(r.video?.title||'')}</a><div class="small muted">${escapeHtml(r.video?.channel?.title||'')}</div></td>
+        </tr>`).join('');
+    }
+
+    // ————— Aggregates tab —————
+    $('#reloadAgg').addEventListener('click', loadAggregates);
+    $('#aggTicker').addEventListener('input', debounce(loadAggregates, 350));
+    $('#aggVerdict').addEventListener('change', loadAggregates);
+    $('#aggLimit').addEventListener('change', loadAggregates);
+
+    async function loadAggregates(){
+      if(!state.connected) return;
+      const limit = $('#aggLimit').value; const verdict = $('#aggVerdict').value; const ticker = $('#aggTicker').value.trim();
+      const params = { select: 'ticker,stock:stocks(name),bull_score,bear_score,neutral_score,verdict,video:videos(id,title,published_at,url)', order: 'video.published_at.desc', limit };
+      if(verdict) params.verdict = `eq.${verdict}`;
+      if(ticker) params.ticker = `eq.${ticker.toUpperCase()}`;
+      const rows = await rest('aggregates', params);
+      $('#aggBody').innerHTML = rows.map(r=>`
+        <tr>
+          <td class="nowrap">${fmtDate(r.video?.published_at)}</td>
+          <td class="mono">${escapeHtml(r.ticker)}<br><span class="muted">${escapeHtml(r.stock?.name||'')}</span></td>
+          <td>${verdictPill(r.verdict)}</td>
+          <td>${fmtNum(r.bull_score)} / ${fmtNum(r.bear_score)} / ${fmtNum(r.neutral_score)}</td>
+          <td><a class="link" href="${r.video?.url}" target="_blank" rel="noreferrer">${escapeHtml(r.video?.title||'')}</a></td>
+        </tr>`).join('');
+    }
+
+    // ————— Stocks tab —————
+    $('#reloadStocks').addEventListener('click', loadStocks);
+    $('#stockSearch').addEventListener('input', debounce(loadStocks, 300));
+    $('#stocksLimit').addEventListener('change', loadStocks);
+
+    async function loadStocks(){
+      if(!state.connected) return;
+      const q = $('#stockSearch').value.trim(); const limit = $('#stocksLimit').value;
+      const params = { select:'ticker,name,exchange', order:'ticker.asc', limit };
+      if(q){
+        if(/^\$?[A-Z.]{1,10}$/.test(q)) params.ticker = `eq.${q.replace('$','').toUpperCase()}`;
+        else params.name = `ilike.*${q.replaceAll('*','%')}*`;
+      }
+      const rows = await rest('stocks', params);
+      const tbody = $('#stocksBody');
+      tbody.innerHTML = rows.map(r=>`<tr data-ticker="${r.ticker}"><td class="mono">${escapeHtml(r.ticker)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.exchange||'')}</td></tr>`).join('');
+      $$('#stocksBody tr').forEach(tr=>tr.addEventListener('click', ()=> showStock(tr.dataset.ticker)));
+    }
+
+    async function showStock(ticker){
+      state.selectedStock = ticker;
+      const [stock] = await rest('stocks', { select:'ticker,name,exchange', ticker:`eq.${ticker}` });
+      const mentions = await rest('mentions', { select:'id,summary,created_at,published_at,sentiment_label,sentiment_score,start_s,video:videos(title,url)', ticker:`eq.${ticker}`, order:'published_at.desc', limit:50 });
+      const aggs = await rest('aggregates', { select:'bull_score,bear_score,neutral_score,verdict,video:videos(title,url,published_at)', ticker:`eq.${ticker}`, order:'video.published_at.desc', limit:50 });
+      $('#stockDetails').innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
+          <div>
+            <div class="small muted">${escapeHtml(stock.exchange||'')}</div>
+            <div style="font-weight:600" class="mono">${escapeHtml(stock.ticker)} · <span class="muted">${escapeHtml(stock.name)}</span></div>
+          </div>
+          <span class="pill">${mentions.length} mentions</span>
+        </div>
+        <div class="card" style="margin-bottom:10px">
+          <h2>Recent aggregates</h2>
+          <div class="body">${aggs.length? `<table><thead><tr><th>Date</th><th>Verdict</th><th>Bull</th><th>Bear</th><th>Neutral</th><th>Video</th></tr></thead><tbody>
+            ${aggs.map(a=>`<tr>
+              <td class="nowrap">${fmtDate(a.video?.published_at)}</td>
+              <td>${verdictPill(a.verdict)}</td>
+              <td>${fmtNum(a.bull_score)}</td>
+              <td>${fmtNum(a.bear_score)}</td>
+              <td>${fmtNum(a.neutral_score)}</td>
+              <td><a class="link" target="_blank" href="${a.video?.url}">${escapeHtml(a.video?.title||'')}</a></td>
+            </tr>`).join('')}</tbody></table>` : '<div class="muted">No aggregates.</div>'}
+          </div>
+        </div>
+        <div class="card">
+          <h2>Recent mentions</h2>
+          <div class="body">${mentions.length? `<div class="rows"><table><thead><tr><th>When</th><th>Summary</th><th>Sentiment</th><th>Score</th><th>Video</th></tr></thead><tbody>
+            ${mentions.map(m=>`<tr>
+              <td class="nowrap">${fmtDate(m.published_at)}</td>
+              <td>${escapeHtml(m.summary)}</td>
+              <td>${sentimentPill(m.sentiment_label)}</td>
+              <td>${fmtNum(m.sentiment_score)}</td>
+              <td><a class="link" href="${addTimeParam(m.video?.url||'', m.start_s)}" target="_blank">${escapeHtml(m.video?.title||'')}</a></td>
+            </tr>`).join('')}</tbody></table></div>` : '<div class="muted">No mentions.</div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    // ————— Transcripts tab —————
+    $('#reloadTrx').addEventListener('click', loadTrx);
+
+    async function loadTrx(){
+      if(!state.connected) return;
+      const q = $('#trxSearch').value.trim(); const limit = $('#trxLimit').value;
+      const params = { select:'language,text,video:videos(id,title,url,published_at)', order:'video.published_at.desc', limit };
+      if(q) params.text = `ilike.*${q.replaceAll('*','%')}*`;
+      const rows = await rest('transcripts', params);
+      $('#trxBody').innerHTML = rows.map(r=>`
+        <tr>
+          <td><a class="link" href="${r.video?.url}" target="_blank">${escapeHtml(r.video?.title||'')}</a><div class="small muted">${fmtDate(r.video?.published_at)}</div></td>
+          <td>${escapeHtml(r.language||'—')}</td>
+          <td>${escapeHtml(snippet(r.text, 260))}</td>
+        </tr>`).join('');
+    }
+
+    // ————— Utils —————
+    function snippet(s, n){ if(!s) return ''; s = s.replace(/\s+/g,' ').trim(); return s.length>n? s.slice(0, n-1)+'…' : s }
+    function debounce(fn, t){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn.apply(null,a), t) } }
+    function escapeHtml(s){
+      return String(s||'').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[ch]));
+    }
+  </script>
+
+  <!--
+  ─────────────────────────────────────────────────────────────────────────────
+  Setup notes
+  ─────────────────────────────────────────────────────────────────────────────
+  • Host this file anywhere (S3, Vercel static, GitHub Pages).
+  • Click “Save” to store your Supabase URL and anon key locally in the browser.
+  • This app uses the REST interface only (no supabase-js). It relies on foreign key
+    relationships to embed rows (e.g., select=video:videos(...),stock:stocks(...)).
+  • Make sure Row Level Security policies allow read access for these tables. Example:
+      CREATE POLICY "Allow read for anon" ON public.videos
+        FOR SELECT TO anon USING (true);
+    Repeat for other tables or define more granular policies.
+  • CORS: in the Supabase project settings, allow your website origin.
+  • If you want to hardcode credentials instead of the connect form, set:
+        state.url = 'https://YOUR-PROJECT.supabase.co';
+        state.key = 'YOUR-ANON-KEY'; state.connected = true; then call loaders.
+  -->
+</body>
+</html>
